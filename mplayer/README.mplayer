@@ -1,6 +1,8 @@
 Using the mplayer-plugin with the PVR350 requires an mplayer version with an
 ivtv cvidix driver.
 
+28.01.2023: Warning: This has not been tested for over 10 years. It is very likely that the patch no longer works for recent mplayer versions.
+
 Compiling mplayer
 -----------------
 Due to a bug in the mplayer configure script it is likely that the mplayer shipped with your

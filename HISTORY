@@ -166,3 +166,7 @@ first release of "new" plugin (see README)
 - remove support for ancient ivtv driver versions
 - adapt Makefile to vdr's new Makefile system
 - fix segfaults on exit when framebuffer device is missing
+
+2.0.0
+-----
+- adapt to new V4L2 decoder API and remove reference to deprecated linux/dvb/video.h and linux/dvb/audio.h

@@ -40,8 +40,6 @@
 #include <linux/ivtv.h>
 #include <linux/ivtvfb.h>
 #include <linux/version.h>
-#include <linux/dvb/video.h>
-#include <linux/dvb/audio.h>
 
 #include "pvr350tools.h"
 #include "pvr350audio.h"
@@ -142,8 +140,7 @@ cPvr350Device::cPvr350Device(void)
 
 	m_AC3toMP2Init = false;
 	m_AC3DecodeStatePtr = (AC3DecodeState_t *)&m_AC3DecodeState;
-	audiomode = 0; //assume stereo setting
-                       //Because ivtv sets AUDIO_MONO_LEFT for bilingual streams, we rely on vdr to set SetAudioChannel() to stereo 
+	audiomode = 0; //assume vdr's SetAudioChannel() sets stereo setting
 	framecount = 0;
 	newStream = true;
 	streamtype = undef;
@@ -174,13 +171,14 @@ void cPvr350Device::OpenFramebuffer()
 		fbfd = -1;
 	}
 	if (fbfd == -1) {
-		log(pvrERROR, "pvr350: Cannot find framebuffer");
+		log(pvrERROR, "pvr350: Cannot find framebuffer. Is ivtvfb loaded? Check permissions: Is your user in group 'video' ?");
 		_exit(1);
 	}
 
 	Format16_9 = true;
 
 	struct v4l2_format fmt;
+	memset(&fmt, 0, sizeof(fmt));
 
 	if ((ret = ioctl(fd_out, VIDIOC_G_FBUF, &fbuf)) < 0) {
 		log(pvrERROR, "pvr350: VIDIOC_G_FBUF error=%d:%s", errno, strerror(errno));
@@ -448,46 +446,46 @@ void cPvr350Device::GetOsdSize(int &Width, int &Height, double &PixelAspect)
 
 void cPvr350Device::DecoderStop(int blank)
 {
-	struct video_command cmd;
+	struct v4l2_decoder_cmd cmd;
 	memset(&cmd, 0, sizeof(cmd));
-	cmd.cmd = VIDEO_CMD_STOP;
+	cmd.cmd = V4L2_DEC_CMD_STOP;
 	if (blank) {
-		cmd.flags = VIDEO_CMD_STOP_TO_BLACK | VIDEO_CMD_STOP_IMMEDIATELY;
+		cmd.flags = V4L2_DEC_CMD_STOP_TO_BLACK | V4L2_DEC_CMD_STOP_IMMEDIATELY;
 	} else { //show last frame instead of a black screen
-		cmd.flags = VIDEO_CMD_STOP_IMMEDIATELY;
+		cmd.flags = V4L2_DEC_CMD_STOP_IMMEDIATELY;
 	}
-	if (IOCTL(fd_out, VIDEO_COMMAND, &cmd) < 0) {
-		log(pvrERROR, "pvr350: VIDEO_CMD_STOP %s error=%d:%s",
+	if (IOCTL(fd_out, VIDIOC_DECODER_CMD, &cmd) < 0) {
+		log(pvrERROR, "pvr350: V4L2_DEC_CMD_STOP %s error=%d:%s",
 			blank ? "(blank)" : "", errno, strerror(errno));
 	}
 }
 
 void cPvr350Device::DecoderPlay(int speed)
 {
-	struct video_command cmd;
+	struct v4l2_decoder_cmd cmd;
 	memset(&cmd, 0, sizeof(cmd));
-	cmd.cmd = VIDEO_CMD_PLAY;
+	cmd.cmd = V4L2_DEC_CMD_START;
 	if (speed) {
-		cmd.play.speed = speed;
+		cmd.start.speed = speed;
 	}
-	if (IOCTL(fd_out, VIDEO_COMMAND, &cmd) < 0) {
-		log(pvrERROR, "pvr350: VIDEO_CMD_START (speed=%d) error=%d:%s",
+	if (IOCTL(fd_out, VIDIOC_DECODER_CMD, &cmd) < 0) {
+		log(pvrERROR, "pvr350: V4L2_DEC_CMD_START (speed=%d) error=%d:%s",
 			speed, errno, strerror(errno));
 	}
 }
 
 void cPvr350Device::DecoderPaused(int paused)
 {
-	struct video_command cmd;
+	struct v4l2_decoder_cmd cmd;
 	memset(&cmd, 0, sizeof(cmd));
 	if (paused) {
-		cmd.cmd = VIDEO_CMD_FREEZE;
+		cmd.cmd = V4L2_DEC_CMD_PAUSE;
 	} else {
-		cmd.cmd = VIDEO_CMD_CONTINUE;
+		cmd.cmd = V4L2_DEC_CMD_RESUME;
 	}
-	if (ioctl(fd_out, VIDEO_COMMAND, &cmd) < 0) {
+	if (ioctl(fd_out, VIDIOC_DECODER_CMD, &cmd) < 0) {
 		log(pvrERROR, "pvr350: %s error=%d:%s",
-			paused ? "VIDEO_CMD_FREEZE" : "VIDEO_CMD_CONTINUE",
+			paused ? "V4L2_DEC_CMD_PAUSE" : "V4L2_DEC_CMD_RESUME",
 			errno, strerror(errno));
 	}
 }
@@ -506,7 +504,7 @@ void cPvr350Device::Play(void)
 {
 	log(pvrDEBUG1, "cPvr350Device::(Resume) Playback");
 	DecoderPlay(1000); //normal speed
-	//we cannot use VIDEO_CMD_CONTINUE: Leaving slow speed (trickmode) must reset to normal speed
+	//we cannot use V4L2_DEC_CMD_RESUME: Leaving slow speed (trickmode) must reset to normal speed
 }
 
 void cPvr350Device::Freeze(void)
@@ -525,16 +523,47 @@ void cPvr350Device::Mute(void)
 
 void cPvr350Device::SetAudioChannelDevice(int AudioChannel)
 {
-	log(pvrDEBUG1, "cPvr350Device::SetAudioChannelDevice (%s)",
+    int AudioChannelCtrl;
+    log(pvrDEBUG1, "cPvr350Device::SetAudioChannelDevice (%s)",
 		AudioChannel == 0?"stereo":
 		AudioChannel == 1?"mono left":"mono right");
 	// 0=stereo, 1=left, 2=right, -1=no information available.
 
-	if (ioctl(fd_out, AUDIO_CHANNEL_SELECT, AudioChannel) < 0) {
-		log(pvrERROR, "pvr350: SetAudioChannelDevice (audio_stereo_mode) error=%d:%s", errno, strerror(errno));
+	switch (AudioChannel) {
+		default:
+		case 0:   AudioChannelCtrl =  V4L2_MPEG_AUDIO_DEC_PLAYBACK_STEREO; break;
+		case 1:   AudioChannelCtrl =  V4L2_MPEG_AUDIO_DEC_PLAYBACK_LEFT; break;
+		case 2:   AudioChannelCtrl =  V4L2_MPEG_AUDIO_DEC_PLAYBACK_RIGHT; break;
+		}
+	struct v4l2_ext_controls ctrls;
+	struct v4l2_ext_control  ctrl;
+    
+	memset(&ctrl, 0, sizeof(v4l2_ext_control));  
+	ctrl.id    = V4L2_CID_MPEG_AUDIO_DEC_PLAYBACK;
+	ctrl.value = AudioChannelCtrl;
+
+	memset(&ctrls, 0, sizeof(v4l2_ext_controls)); 
+	ctrls.ctrl_class = V4L2_CTRL_CLASS_MPEG;
+	ctrls.controls = &ctrl;
+	ctrls.count = 1;
+
+	if (IOCTL(fd_out, VIDIOC_S_EXT_CTRLS, &ctrls) != 0) {
+		log(pvrERROR, "pvr350: SetAudioChannelDevice(): error setting control %s to %s: %d:%s",
+		ctrl.id, ctrl.value, errno, strerror(errno));
 	}
-	if (ioctl(fd_out, AUDIO_BILINGUAL_CHANNEL_SELECT, AudioChannel) < 0) {
-		log(pvrERROR, "pvr350: SetAudioChannelDevice (audio_bilingual_mode) error=%d:%s", errno, strerror(errno));
+
+    memset(&ctrl, 0, sizeof(v4l2_ext_control));
+	ctrl.id    = V4L2_CID_MPEG_AUDIO_DEC_MULTILINGUAL_PLAYBACK;
+	ctrl.value = AudioChannelCtrl;
+    
+	memset(&ctrls, 0, sizeof(v4l2_ext_controls)); 
+	ctrls.ctrl_class = V4L2_CTRL_CLASS_MPEG;
+	ctrls.controls = &ctrl;
+	ctrls.count = 1;    
+
+	if (IOCTL(fd_out, VIDIOC_S_EXT_CTRLS, &ctrls) != 0) {
+		log(pvrERROR, "pvr350: SetAudioChannelDevice(): error setting control %s to %s: %d:%s",
+		ctrl.id, ctrl.value, errno, strerror(errno));
 	}
 	audiomode = AudioChannel;
 }
@@ -919,11 +948,11 @@ cSpuDecoder *cPvr350Device::GetSpuDecoder(void)
 	return spuDecoder;
 }
 
-void cPvr350Device::SetVidInfo(const uchar *mbuf, int count)
+void cPvr350Device::SetVidInfo(const uchar *mbuf, __u32 count)
 {
 	const uchar *headr;
 	int found = 0;
-	int c = 0;
+	__u32 c = 0;
 
 	struct v4l2_crop crop;
 	memset (&crop, 0, sizeof (crop));
@@ -970,13 +999,14 @@ void cPvr350Device::SetVidInfo(const uchar *mbuf, int count)
 			crop.c.left  = lx;
 			crop.c.top   = ly;
 		} else {			/* 16:9 TV */
+            /*ToDo: What if the TV is fixed to anarmorphic and the 4:3 content gets stretched?*/            
 			crop.c.width = width;
 			crop.c.height= height;
 			crop.c.left  = lx;
 			crop.c.top   = ly;
 		}
-		if (crop.c.width  != (int)current_horiz ||
-		    crop.c.height != (int)current_vertical ) {
+		if (crop.c.width  != (__u32)current_horiz ||
+		    crop.c.height != (__u32)current_vertical ) {
 			current_horiz    = crop.c.width;
 			current_vertical = crop.c.height;
 			log(pvrDEBUG1, "pvr350: Trying size set (4:3): %dx%d %dx%d",
@@ -1010,8 +1040,8 @@ void cPvr350Device::SetVidInfo(const uchar *mbuf, int count)
 				crop.c.top = ly + (height - crop.c.height) / 2;
 			}
 		}
-		if (crop.c.width != (int)current_horiz ||
-		    crop.c.height != (int)current_vertical || sizechanged ) {
+		if (crop.c.width != (__u32)current_horiz ||
+		    crop.c.height != (__u32)current_vertical || sizechanged ) {
 			sizechanged = 0;
 			current_horiz = crop.c.width;
 			current_vertical = crop.c.height;
@@ -1035,14 +1065,23 @@ void cPvr350Device::SetVidInfo(const uchar *mbuf, int count)
 
 int64_t cPvr350Device::GetSTC(void)
 {
-	int64_t pts = 0;
+	struct v4l2_ext_controls ctrls;
+	struct v4l2_ext_control  ctrl;
+	memset(&ctrl, 0, sizeof(v4l2_ext_control)); 
+	ctrl.id = V4L2_CID_MPEG_VIDEO_DEC_PTS;
 
-	if (ioctl(fd_out, VIDEO_GET_PTS, &pts) < 0) {
-		log(pvrERROR, "pvr350: GetSTC error=%d:%s", errno, strerror(errno));
+	memset(&ctrls, 0, sizeof(v4l2_ext_controls));
+	ctrls.ctrl_class = V4L2_CTRL_CLASS_MPEG;
+	ctrls.controls = &ctrl;
+	ctrls.count = 1;
+
+	if (IOCTL(fd_out, VIDIOC_G_EXT_CTRLS, &ctrls) != 0) {
+		log(pvrERROR, "pvr350: GetSTC(): error getting control %s: %d:%s",
+		ctrl.id, errno, strerror(errno));
 		return -1;
 	}
-	log(pvrDEBUG2, "cPvr350Device::GetSTC(): PTS=%lld", pts);
-	return pts;
+	log(pvrDEBUG2, "pvr350: GetSTC(): PTS=%lld", ctrls.controls->value);	
+	return ctrls.controls->value;
 }
 
 void cPvr350Device::SetVideoSize(int x, int y, int w, int d)
@@ -1244,6 +1283,8 @@ bool cPvr350Device::ConvertMP2Audio(uint8_t *Data, int PayloadOffset, int Length
 						&pcm_bytes);
 	if (bytes_left < 0) {
 		log(pvrERROR, "pvr350: ConvertMP2Audio() - error decode audio");
+		//re-initialize mpeg123 in PlayAudio()
+		delete m_MP2toMP2;
 		return false;
 	}
 	if (pcm_bytes <= 0) {

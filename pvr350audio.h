@@ -177,7 +177,7 @@ public:
 	~cAC3toMP2();
 	int	scale_value;
 	int 	A52DecodeFrame(AC3DecodeState_t *s, int16_t *outbuf, int *outbuf_size,
-				uint8_t *inbuf, int inbuf_bytes);
+				uint8_t *inbuf, int inbuf_size);
 	int 	MP2EncodeFrame(int16_t *inbuf, int inbuf_bytes, uint8_t *outbuf,
 				int outbuf_size);
 };

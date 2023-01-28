@@ -70,7 +70,7 @@ private:
 	bool		m_MP2RecodeInit;
 	bool		DecEncMP2Audio;
 
-	void SetVidInfo(const uchar *mbuf, int count);
+	void SetVidInfo(const uchar *mbuf, __u32 count);
 	void OpenFramebuffer();
 	void ProcessAC3Audio(uint8_t *PESPacket, int PESHeader_len, int Length);
 	bool CheckMPEGAudio4JointStereo(const uchar *PESData, int Length);
@@ -94,7 +94,7 @@ public:
 	virtual void Play(void);
 	virtual void Freeze(void);
 	virtual void Mute(void);
-        virtual int GetAudioChannelDevice(void);
+	virtual int GetAudioChannelDevice(void);
 	virtual void SetAudioChannelDevice(int AudioChannel);
 	virtual void StillPicture(const uchar *Data, int Length);
 	virtual int PlayVideo(const uchar *Data, int Length);

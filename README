@@ -5,7 +5,7 @@ Written by:		Dominic Morris <dom@suborbital.org.uk> (Original Author),
                         Martin Dauskardt <directorskinner@arcor.de> ("Dr. Seltsam")
 
 
-Latest version available at:  http://drseltsam.device.name/vdr/pvr/src/pvr350/
+Latest version available at:  https://projects.vdr-developer.org/projects/plg-pvr350/files
 
 The pvr350-plugin was originally written by Dominic Morris, but he stopped development.
 Based on the last version 0.0.5 from December 2005 (which was only sent to a few people),
@@ -33,12 +33,7 @@ This plugin implements an output device for the PVR350 TV out.
 Requirements:
 -------------
 
-- vdr 1.4., 1.6. or >= 1.7.9
-
-- ivtv driver version >= 1.x.x
-  You need both ivtv (included in kernel since 2.6.22) and ivtvfb (included in kernel since 2.6.24).
-  If you have a kernel < 2.6.24 have a look at http://ivtvdriver.org/index.php/Download to see what
-  you need to compile.
+- vdr 2.4 or 2.6
 
 - twolame >= 0.3.9 from http://www.twolame.org/
   For Debian/Ubuntu the package name is libtwolame-dev.
@@ -49,23 +44,16 @@ Requirements:
   (see below in "Problems/Troubleshooting" about problems with mpg123 version 1.11.0)
 
 - plugin pvrinput (you don`t need it, if you only want to use the pvr350 decoder part, e.g. with DVB cards) 
-  You can find the latest sources at http://projects.vdr-developer.org/git/?p=vdr-plugin-pvrinput.git;a=summary
+  You can find the latest sources at https://www.vdr-portal.de/index.php?attachment/45825-vdr-pvrinput-2020-02-22-tar-gz/
 
-- Be sure you have a recent version of videodev2.h in your /usr/include/linux.
-  You also need recent versions of /usr/include/linux/dvb/video.h and /usr/include/linux/dvb/video.h
-  Furthermore, you need current versions of /usr/include/linux/ivtv.h and /usr/include/linux/ivtvfb.h.
-  You may already have the last two in /usr/include/media, but the location has been changed
-  to /usr/include/linux in August 2007.
-  All files can be found at http://linuxtv.org/hg/v4l-dvb. Click on "manifest" and browse
-  to linux/include/linux/.
 
 Installation:
 -------------
 - Unpack the package into "PLUGINS/SRC" directory.
 - Make a symbolic link to this pvr350-plugin (ln -s pvr350-x.x.x pvr350).
 - Call "make plugins" in the VDR root directory.
-- Make sure ivtv and ivtv-fb modules are loaded. (In newer driver versions ivtv-fb has been renamend to ivtvfb !)
-- If you want to use the remote, load lirc-i2c
+- Make sure ivtv and ivtvfb modules are loaded.
+- If you want to use the Hauppauge remote, load lirc-i2c
 - Start vdr with plugin pvr350 (for example "vdr -Ppvr350")
 - If you don't have a DVB device and use the PVR350 for analogue TV only (with pvrinput), you should
   turn off "Recode MP2" in the plugin settings to avoid unnecessary CPU load. 
@@ -103,32 +91,11 @@ Problems/Troubleshooting:
   If all does not help, there is another way: have a look in /lib/modules/<kernelversion>/kernel/drivers/video/console
   If there is a module named fbcon.ko, deactivate it by renaming it to fbcon.ko.HIDE. Don't forget to make a depmod.
 
-  WARNING: There is obviously a kernel bug: After unloading ivtvfb this way, the /proc/dev/fb0 
-  does still exist, but loading ivtvfb again will create a new /proc/dev/fb0. At least vdr will crash,
-  you may also get a kernel oops. So use this as last solution and avoid unloading/reloading ivtvfb
-  without a reboot. A patch for this problem was posted here by Ian Armstrong:
-  http://www.gossamer-threads.com/lists/ivtv/devel/40194
-  This patch is included in kernel 2.6.31.2 
-
 - playing an ac3-DVD with the dvd-plugin: You need to set "Use Dolby Digital" to "yes" in the vdr
   settings, otherwise you won`t hear anything. The pvr350-plugin converts ac3 internally to mp2. You
   may notice a much lower audio volume. This is because ac3 has more dynamic range (the difference
   between loud and soft). You can adjust the AC3 Gain level in the plugin setup menu, which is also
   useful for DVB channels with AC3 sound.
-
-- When switching from fast forward to Play, it always skips a few seconds (vdr versions prior 1.7.9). The reason
-  is, that vdr calls "Clear()" to clear the decoder buffers. For DVB cards (which have a smaller buffer)
-  vdr`s dvbplayer uses cBacktrace to compensate this. You can patch vdr 1.4 and 1.6 (dvbplayer.c):
-  
-	int cBackTrace::Get(bool Forward)
-	{
-	  int p = pos;
-	  int n = num;
-	//  int l = DVB_BUF_SIZE + (Forward ? 0 : 256 * 1024); //XXX (256 * 1024) == DVB_BUF_SIZE ???
-	  int l = (2560 * 1024); //fix for PVR350
-	  int i = -1; 
-
-  This is not necessary with vdr >= 1.7.9!
 
 - radio Plugin does not work: 
   Turn off "Black video for audio-only streams" in the pvr350 plugin menu. (The hardware cannot play

@@ -11,7 +11,7 @@
 #include "pvr350menu.h"
 #include "pvr350.h"
 
-static const char *VERSION        = "1.7.5";
+static const char *VERSION        = "2.0.0";
 static const char *DESCRIPTION    = trNOOP("PVR350 as output device");
 
 
