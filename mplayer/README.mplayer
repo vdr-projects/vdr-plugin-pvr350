@@ -1,0 +1,158 @@
+Using the mplayer-plugin with the PVR350 requires an mplayer version with an
+ivtv cvidix driver.
+
+Compiling mplayer
+-----------------
+Due to a bug in the mplayer configure script it is likely that the mplayer shipped with your
+Distribution has no such output driver. 
+
+If you compile mplayer yourself, you first need to compile and install two libs:
+
+svn checkout svn://svn.mplayerhq.hu/dvdnav/trunk/libdvdread
+svn checkout svn://svn.mplayerhq.hu/dvdnav/trunk/libdvdnav
+
+In each lib directory (starting with libdvdread) we do the following:
+
+ ./autogen.sh
+ ./configure --prefix=/usr
+ make
+ make install
+
+Now we need to compile mplayer:
+
+svn checkout svn://svn.mplayerhq.hu/mplayer/trunk mplayer
+
+Before configuring, please check the configure script for this part (around line 4536)
+
+If it looks like this:
+
+if test "$_vidix" = yes ; then
+  def_vidix='#define CONFIG_VIDIX 1'
+  _vomodules="cvidix $_vomodules"
+  # FIXME: ivtv driver temporarily disabled until we have a proper test
+  #test "$_vidix_drivers" || _vidix_drivers="cyberblade ivtv mach64 mga mga_crtc2 nvidia pm2 pm3 radeon rage128 s3 sh_veu sis unichrome"
+  test "$_vidix_drivers" || _vidix_drivers="cyberblade mach64 mga mga_crtc2 nvidia pm2 pm3 radeon rage128 s3 sh_veu sis unichrome"
+
+then change it to
+
+if test "$_vidix" = yes ; then
+  def_vidix='#define CONFIG_VIDIX 1'
+  _vomodules="cvidix $_vomodules"
+  # FIXME: ivtv driver temporarily disabled until we have a proper test
+  test "$_vidix_drivers" || _vidix_drivers="cyberblade ivtv mach64 mga mga_crtc2 nvidia pm2 pm3 radeon rage128 s3 sh_veu sis unichrome"
+  #test "$_vidix_drivers" || _vidix_drivers="cyberblade mach64 mga mga_crtc2 nvidia pm2 pm3 radeon rage128 s3 sh_veu sis unichrome"
+
+
+Note: Do not use the option  "--enable-ivtv" as this is for the old 0.10 ivtv pre-kernel driver! 
+
+I use the following configure options for mplayer:
+
+./configure \
+--prefix=/usr \
+--disable-x11 \
+--disable-xinerama \
+--disable-fbdev \
+--disable-vesa \
+--disable-tga \
+--disable-jpeg \
+--disable-ftp \
+--disable-network \
+--enable-largefiles \
+--disable-png \
+--disable-smb \
+--disable-gif \
+--enable-v4l2 \
+--enable-dhahelper \
+--disable-dvdread-internal
+
+
+Before compiling you may want to apply a patch for handling different device
+numbers:
+In case you have more than one ivtv card, your PVR350 may have /dev/video17
+for the decoder and /dev/video49 for the YUV/cvidix-output. The mplayer cvidix
+driver can't handle this. The easiest way is to switch the cards in the
+PCI slots. You could also try the attached patch.
+
+Possible mplayer compile problem
+---------------------------------
+mplayer checks if your kernel version is at least 2.6.22
+(integration of ivtv into the kernel) or newer.
+The code checks the LINUX_VERSION_CODE which is defined in your
+/usr/include/linux/version.h
+For a 2.6.22 kernel there you would find: 
+#define LINUX_VERSION_CODE 132630
+If you have a lower number, it is very likely that you won't be able to compile
+mplayer. This is the case with Debian Etch, which is based on a 2.6.18 kernel
+and therefore still has LINUX_VERSION_CODE 132626. Installing a new kernel
+package will usually have no effect on this.
+
+If you already run a newer kernel, temporary change the number in
+/usr/include/linux/version.h and make sure that you have recent versions of
+the following files:
+/usr/include/linux/ivtv.h
+/usr/include/linux/videodev2.h
+/usr/include/linux/dvb/video.h
+(You could copy them from a v4l-dvb hg snapshot.)
+
+Note: In kernel 2.6.22 and 2.6.23 the ivtv.h was in /usr/include/media,
+while mplayer looks for it in /usr/include/linux. Some old distributions may have
+ivtv.h in /usr/include/media.
+
+
+Configure remote control
+------------------------
+I suggest the following configuration for mplayer (vdr setup.conf):
+
+mplayer.ControlMode = 1
+mplayer.HideMainMenu = 0
+mplayer.KeyCmd0 = dvdnav menu
+mplayer.KeyCmd1 = seek_chapter -1
+mplayer.KeyCmd2 = dvdnav up
+mplayer.KeyCmd3 = seek_chapter +1
+mplayer.KeyCmd4 = dvdnav left
+mplayer.KeyCmd5 = dvdnav select
+mplayer.KeyCmd6 = dvdnav right
+mplayer.KeyCmd7 = dvdnav prev
+mplayer.KeyCmd8 = dvdnav down
+mplayer.KeyCmd9 = switch_audio
+mplayer.ResumeMode = 2
+
+If you use a recent hg version of the mp3/mplayer-plugin you could use some
+existing vdr keys to control mplayer:
+Audio to "switch_audio"
+Next to "seek_chapter +1"
+Prev to "seek_chapter -1"
+In this case you could use KeyCmd1 and KeyCmd3 for "audio_delay -0.1"
+and "audio_delay +0.1"
+Note: You need to configure these keys in your remote.conf and lircd.conf 
+
+
+mplayer-script and mplayer-config file
+--------------------------------------- 
+Copy mplayer-pvr350.sh and mplayer-pvr350.sh.conf to /usr/bin and set symlinks
+mplayer.sh -> mplayer-pvr350.sh
+mplayer.sh.conf -> mplayer-pvr350.sh.conf
+
+Note: Debian uses a patched mplayer-plugin which uses the script /usr/share/vdr-plugin-mplayer/mplayer
+(instead of /usr/bin/mplayer.sh). The configuration file is  /etc/vdr/plugins/vdrmplayer.sh.conf
+(instead of /usr/bin/mplayer.sh.conf)
+
+To switch the aspect ratio of yout TV by using wss signals, the mplayer script now
+uses the plugin by sending svdrp commands.
+Note: For using mplayer, set "16:9 WSS for pmExtern" in the pvr350
+plugin menu to "no".
+
+root-privileges
+---------------
+The vidix driver does a PCI scan, so mplayer needs root privileges. If you don't run your vdr as root, 
+I suggest the following trick:
+
+Set the SUID bit for mplayer:
+
+sudo chmod -v 4700 mplayer
+
+change the conf-file:
+
+MPLAYER="sudo /usr/bin/mplayer" 
+
+mplayer (started by vdr user) will run with root privileges without entering a password.

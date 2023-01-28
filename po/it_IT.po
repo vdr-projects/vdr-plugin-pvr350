@@ -1,0 +1,50 @@
+# translation of it_IT.po to
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+#
+# Winfried Koehler <see vdr-portal.de>, 2007.
+# Martin Dauskardt <martin.dauskardt@gmx.de>, 2010, 2012.
+msgid ""
+msgstr ""
+"Project-Id-Version: it_IT\n"
+"Report-Msgid-Bugs-To: <see README>\n"
+"POT-Creation-Date: 2010-03-28 10:03+0200\n"
+"PO-Revision-Date: 2012-06-01 13:33+0200\n"
+"Last-Translator: Martin Dauskardt <martin.dauskardt@gmx.de>\n"
+"Language-Team: Deutsch <kde-i18n-de@kde.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Lokalize 1.0\n"
+"X-Poedit-Language: Italian\n"
+"X-Poedit-Country: ITALY\n"
+"X-Poedit-SourceCharset: utf-8\n"
+"Plural-Forms: nplurals=2; plural=n != 1;\n"
+
+msgid "PVR350 as output device"
+msgstr "PVR350 come periferica di uscita"
+
+msgid "Setup.pvr350$Log level"
+msgstr "Livello log"
+
+msgid "Setup.pvr350$Wide Screen Signaling (WSS)"
+msgstr "Wide Screen Signaling (WSS)"
+
+msgid "Setup.pvr350$16:9 WSS for pmExtern"
+msgstr "WSS 16:9 per pmExtern"
+
+msgid "Setup.pvr350$Device number (/dev/videoXX)"
+msgstr "Numero scheda (/dev/videoXX)"
+
+msgid "Setup.pvr350$AC3 Gain"
+msgstr "Suono AC3"
+
+msgid "Setup.pvr350$Black video for audio-only streams"
+msgstr "Schermo scuro per flussi solo audio"
+
+msgid "Setup.pvr350$Recode MP2"
+msgstr "Ricodifica MP2 audio"
+
+
+#~ msgid "Setup.pvr350$Recode RDS radio"
+#~ msgstr "Ricodifica radio RDS"

@@ -1,0 +1,275 @@
+Index: vidix/ivtv_vid.c
+===================================================================
+--- vidix/ivtv_vid.c	(Revision 29462)
++++ vidix/ivtv_vid.c	(Arbeitskopie)
+@@ -21,7 +21,9 @@
+  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+  */
+ 
++#include <ctype.h>
+ #include <errno.h>
++#include <glob.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
+@@ -30,6 +32,7 @@
+ #include <inttypes.h>
+ #include <fcntl.h>
+ #include <sys/ioctl.h>
++#include <sys/stat.h>
+ #include <linux/types.h>
+ #include <linux/version.h>
+ #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
+@@ -223,16 +226,30 @@
+ 
+ int ivtv_probe(int verbose, int force)
+ {
+-	unsigned char fb_number = 0;
+-	char *device_name = NULL;
+ 	char *alpha = NULL;
++	char *ivtv_video_device_name = NULL;
++	char *ivtv_framebuffer_device_name = NULL;
+ 	struct fb_var_screeninfo vinfo;
+-	char fb_dev_name[] = "/dev/fb0\0";
+ 	pciinfo_t lst[MAX_PCI_DEVICES];
+ 	int err = 0;
+ 	unsigned int i, num_pci = 0;
+-	unsigned char yuv_device_number = 48, yuv_device = 48 + fb_number;
+-	char yuv_device_name[] = "/dev/videoXXX\0";
++	struct stat fileStat;
++	char   sysfsVideoClass[] = "/sys/class/video4linux\0";
++	char   sysfsGraphicsClass[] = "/sys/class/graphics\0";
++	char   *yuv_searchPattern[] = { "/sys/class/video4linux/video*\0", "/dev/video*\0"};
++	char   *fb_searchPattern[] = { "/sys/class/graphics/fb*\0", "/dev/fb*\0"};
++	int    yuv_patNr = 0;
++	int    fb_patNr = 0;
++	glob_t searchResult;
++	char   deviceName[] = "/dev/videoXXXXX\0";
++	int    devLen = 0;
++	struct v4l2_capability vcap;
++	struct v4l2_fmtdesc vfdesc;
++	int    found_yuv_format = 0;
++	char   *tmpStr = NULL;
++	int    yuvDevNumber = -1;
++	struct v4l2_framebuffer fbuf;
++	struct fb_fix_screeninfo fbsi;
+ 
+ 	if(verbose)
+ 		printf(IVTV_MSG"probe\n");
+@@ -272,59 +289,165 @@
+ 
+ card_found:
+ 
+-	device_name = getenv("FRAMEBUFFER");
+-	if(NULL == device_name) {
+-		device_name = fb_dev_name;
+-	}
++	if((NULL != (ivtv_video_device_name = getenv("VIDIXIVTVVIDEODEV"))) && (NULL != (ivtv_framebuffer_device_name = getenv("VIDIXIVTVFRAMEBUFFERDEV")))) {
++		yuvdev = open(ivtv_video_device_name, O_RDWR);
++		if(-1 != yuvdev) {
++			fbdev = open(ivtv_framebuffer_device_name, O_RDWR);
++			if(-1 == fbdev) {
++				close(yuvdev);
++				yuvdev = -1;
++			} else
++				goto yuv_found;
++		}
++ 	}
++	
++	/* test if sysfs is present, otherwise fallback to /dev */
++	if(access(sysfsVideoClass, F_OK) < 0)
++		yuv_patNr = 1;
++	if(access(sysfsGraphicsClass, F_OK) < 0)
++		fb_patNr = 1;
++ 
++	/* search for the installed video devices */
++	if(glob(yuv_searchPattern[yuv_patNr], GLOB_MARK, 0, &searchResult) == 0) {
++		for(i = 0; (yuvDevNumber < 0) && (i < searchResult.gl_pathc); i++) {
++			if(stat(searchResult.gl_pathv[i], &fileStat) == 0) {
++				devLen = 0;
++				if((yuv_patNr == 0) && S_ISDIR(fileStat.st_mode)) {
++					/* get the related device-node */
++					snprintf(deviceName, sizeof(deviceName), "/dev/%s", searchResult.gl_pathv[i] + strlen(sysfsVideoClass) + 1);
++					devLen = strlen(deviceName);
++					if(deviceName[devLen - 1] == '/') {
++						devLen--;
++						deviceName[devLen]= 0;
++					}
++				} else if((yuv_patNr == 1) && !S_ISDIR(fileStat.st_mode)) {
++					snprintf(deviceName, sizeof(deviceName), "%s", searchResult.gl_pathv[i]);
++					devLen = strlen(deviceName);
++				}
++				
++				if(devLen > 0) {
++					yuvdev = open(deviceName, O_RDONLY);
++					if(-1 == yuvdev) {
++						printf(IVTV_MSG"Error occured during opening %s\n", deviceName);
++					} else {
++						if(ioctl(yuvdev, VIDIOC_QUERYCAP, &vcap) < 0) {
++							printf(IVTV_MSG"unable to query capabilites of %s\n", deviceName);
++						} else if(strncmp(vcap.driver, "ivtv", 4) == 0) {
++							if(vcap.capabilities & V4L2_CAP_VIDEO_OUTPUT) {
++								/* it is a device handled by ivtv and it has an output */
++								vfdesc.index = 0;
++								vfdesc.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
++								found_yuv_format = 0;
++								while(ioctl(yuvdev, VIDIOC_ENUM_FMT, &vfdesc) == 0) {
++									if(vfdesc.pixelformat == V4L2_PIX_FMT_HM12) {
++										found_yuv_format= 1;
++										break;
++									}
++									vfdesc.index++;
++								}
++								if(found_yuv_format) {
++									/* it supports the needed pixel format */
+ 
+-	fb_number = atoi(device_name+strlen("/dev/fb"));
++									/* hack is here
++									there is a problem at the v4l2-api
++									a PVR350 has multiple devices
++									/dev/video0
++									/dev/video16
++									/dev/video32
++									/dev/video48
++									VIDIOC_QUERYCAP returns the same for every device
++									so the code has to know that the YUV-decoder is
++									at /dev/video48 or higher
+ 
+-	fbdev = open(device_name, O_RDWR);
+-	if(-1 != fbdev) {
+-		if(ioctl(fbdev, FBIOGET_VSCREENINFO, &vinfo) < 0) {
+-			printf(IVTV_MSG"Unable to read screen info\n");
+-			close(fbdev);
+-			return ENXIO;
+-		} else {
+-			fb_width = vinfo.xres;
+-			fb_height = vinfo.yres;
+-			if(2 == ivtv_verbose) {
+-				printf(IVTV_MSG"framebuffer width : %3.0f\n",fb_width);
+-				printf(IVTV_MSG"framebuffer height: %3.0f\n",fb_height);
++									maybe this is solved in the future...
++									*/
++									tmpStr = deviceName + devLen;
++									while((tmpStr >= deviceName) && isdigit((tmpStr-1)[0]))
++										tmpStr--;
++									if(tmpStr > deviceName) {
++										yuvDevNumber = atoi(tmpStr);
++										if(yuvDevNumber < 48)
++											yuvDevNumber = -1;
++									}
++								}
++							}
++						}
++						close(yuvdev);
++						yuvdev = -1;
++					}
++				}
++ 			}
++ 		}
++	}
++	globfree(&searchResult);
++	if(yuvDevNumber < 0) {
++		printf(IVTV_MSG"no ivtv-driven yuv-decoder found\n");
++		printf(IVTV_MSG"try to set VIDIXIVTVVIDEODEV and VIDIXIVTVFRAMEBUFFERDEV  to the right devicenames (e.g. /dev/video48 and /dev/fb1)\n");
++ 		return ENXIO;
++ 	}
++ 
++	snprintf(deviceName, sizeof(deviceName), "/dev/video%d", yuvDevNumber);
++	yuvdev = open(deviceName, O_RDWR);
++	if(-1 == yuvdev) {
++		printf(IVTV_MSG"Error opening yuv-decoder %s\n", deviceName);
++	} else {
++		if(verbose)
++			printf(IVTV_MSG"Found yuv-decoder %s\n", deviceName);
++		if(ioctl(yuvdev, VIDIOC_G_FBUF, &fbuf) == 0) {
++			/* searching for the related framebuffer-device */
++			if(glob(fb_searchPattern[fb_patNr], GLOB_MARK, 0, &searchResult) == 0) {
++				for(i = 0; i < searchResult.gl_pathc; i++) {
++					if(stat(searchResult.gl_pathv[ i], &fileStat) == 0) {
++						devLen = 0;
++						if((fb_patNr == 0) && S_ISDIR(fileStat.st_mode)) {
++							snprintf(deviceName, sizeof(deviceName), "/dev/%s", searchResult.gl_pathv[i] + strlen(sysfsGraphicsClass) + 1);
++							devLen = strlen( deviceName);
++							if(deviceName[devLen - 1] == '/') {
++								devLen--;
++								deviceName[devLen] = 0;
++							}
++						} else if((fb_patNr == 1) && !S_ISDIR(fileStat.st_mode)) {
++							snprintf(deviceName, sizeof(deviceName), "%s", searchResult.gl_pathv[i]);
++							devLen = strlen(deviceName);
++						}
++						
++						if(devLen > 0) {
++							fbdev = open(deviceName, O_RDWR);
++							if(-1 == fbdev) {
++								printf(IVTV_MSG"Error occured during opening %s\n", deviceName);
++							} else {
++								if(0 == ioctl(fbdev, FBIOGET_FSCREENINFO, &fbsi)) {
++									if(fbsi.smem_start == (unsigned long) fbuf.base)
++										break; /* found it */
++								}
++								close(fbdev);
++								fbdev = -1;
++							}
++						}
++					}
++				}
++				globfree(&searchResult);
+ 			}
+ 		}
+-		if(NULL != (alpha = getenv("VIDIXIVTVALPHA"))) {
+-			if(0 == strcmp(alpha, "disable")) {
+-				alpha_disable = 1;
+-			}
+-		}
+-	} else {
+-		printf(IVTV_MSG"Failed to open /dev/fb%u\n", fb_number);
+-		return ENXIO;
++		if(-1 == fbdev) {
++			printf(IVTV_MSG"no related framebuffer found\n");
++			printf(IVTV_MSG"try to set VIDIXIVTVVIDEODEV and VIDIXIVTVFRAMEBUFFERDEV  to the right devicenames (e.g. /dev/video48 and /dev/fb1)\n");
++		} else
++ 			goto yuv_found;
+ 	}
+-
+-	/* Try to find YUV device */
+-	do {
+-		sprintf(yuv_device_name, "/dev/video%u", yuv_device);
+-		yuvdev = open(yuv_device_name, O_RDWR);
+-		if(-1 != yuvdev) {
+-			if(ivtv_verbose)
+-				printf(IVTV_MSG"YUV device found /dev/video%u\n", yuv_device);
+-			goto yuv_found;
+-		} else {
+-			if(ivtv_verbose)
+-				printf(IVTV_MSG"YUV device not found: /dev/video%u\n", yuv_device);
+-		}
+-	} while(yuv_device-- > yuv_device_number);
+-	return ENXIO;
+-
++	close(yuvdev);
++	yuvdev = -1;
++ 	return ENXIO;
++ 
+ yuv_found:
+ 	if(0 == alpha_disable) {
+ #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22)
+ 		if(ioctl(fbdev, IVTVFB_IOCTL_GET_STATE, &fb_state_old) < 0) {
+ 			printf(IVTV_MSG"Unable to read fb state\n");
+ 			close(yuvdev);
++			yuvdev = -1;
+ 			close(fbdev);
++			fbdev = -1;
+ 			return ENXIO;
+ 		} else {
+ 			if(ivtv_verbose) {
+@@ -340,7 +463,9 @@
+ 		if(ioctl(yuvdev, VIDIOC_G_FMT , &format_old) < 0) {
+ 			printf(IVTV_MSG"Unable to read fb state\n");
+ 			close(yuvdev);
++			yuvdev = -1;
+ 			close(fbdev);
++			fbdev = -1;
+ 			return ENXIO;
+ 		} else {
+ 			if(ivtv_verbose) {

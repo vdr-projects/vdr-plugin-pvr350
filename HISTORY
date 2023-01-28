@@ -1,0 +1,156 @@
+2007-06-09
+----------
+first release of "new" plugin (see README)
+
+2007-08-07
+----------
+- make plugin ready for use of renamed ioctl IVTVFB_IOC_DMA_FRAME (was IVTVFB_IOCTL_PREP_FRAME)
+ (thanks to Wirbel for his redesign of the code which is used to detect driver version) 
+- implement setting of wss bits for 16:9/4:3 format switch (thanks to Andreas Schäfers who helped me how to set
+  the bit only when format changes)
+
+2007-10-03
+----------
+- assume driver 1.0.0 uses IVTVFB_IOC_DMA_FRAME
+- fix Audio ID for mp2: must be 0xC0 ... 0xDF to get additional audio channels
+- introduce small setup menu.
+- remove support for older vdr versions than 1.3.7
+- The device number /video16 is no longer hardcoded. Setup allows configuration for use with /dev/video17 ... /dev/video20
+
+2007-10-17 (thanks to Wirbel)
+----------
+- started internationalization with gettext (Makefile target i18n + folder po)
+- compile fix vdr version 1.5.9 (added uint Level to cPvr350Osd::cPvr350Osd and cPvr350OsdProvider::CreateOsd)
+
+2007-11-17
+----------
+- implemented log level (thanks to Andreas Schäfers)
+- adapted OSD to be able to display subtitles in vdr 1.5.10
+- simplified includes, removed some unnecessary
+
+2007-11-29
+----------
+- Use log level 4 for some functions which are called permanently and would mess up the log
+
+2007-03-12
+----------
+- fixed a big bug :-) : On playmode pmExtern we need to keep the fbfd device open. Otherwise we wouldn`t have the OSD to
+  control e.g mplayer
+
+2007-08-15
+----------
+- create a workaround in Play() for a bug in the ivtv version which is included in Kernel
+  2.6.22 (pause/continue/play handling). (Thanks to Andreas Schaefers)
+- Fix subtitles for VDR >= 1.5.11 (add SetAreas)
+
+2008-01-06
+----------
+- move StopDecodeLastframe() into Clear() and explicitly restart the decoder
+- GetSTC() is no longer a dummy; it now delivers the pts
+- Use log level 4 for ProcessAC3Audio()
+- remove Clear() in cPvr350Device::StillPicture(). This was a left over from the old versions where
+  Clear() did only clear the ringbuffer.
+- call the base class function in Clear() and Mute() (as drescribed in vdr`s device.h)
+
+2008-01-20
+----------
+- add new setup entry "WSS for pmExtern ?". If set to yes, the plugin will send a 16:9 wss bit if PlayMode is "pmExtern".
+  This is useful if you use the mplayer plugin with monitoraspect 16:9. 
+
+2008-01-26
+----------
+- Fix SetupParse for Pvr350Setup.WSS_169_for_pmExtern
+
+2008-05-17
+----------
+- implement SetAudioChannelDevice() and GetAudioChannelDevice() for handling of bilingual audio.
+
+2008-05-30
+----------
+- improve log messages
+
+2008-08-17
+----------
+- strip audio packets in Stillpicture, which removes the stuttering on cut marks
+- note requirement of a52dec in README (thanks to Joerg Gehlhaar <jjgehlhaar@t-online.de> )
+- remove extract from linux/dvb/video.h. Instead include linux/dvb/video.h
+- note requirement of recent versions of three include files in README.
+- add more details about driver versions in README
+- use write() instead of the ioctl IVTVFB_IOC_DMA_FRAME for ivtv driver >= 1.4.0
+  (thanks to Ian Armstrong for the patch)
+- compile fix for 64-bit
+- fix output of esyslog errors
+- change Makefile in order to delete the  *.pot-Template at "make clean"
+- updated italian language file (thanks to Diego Pierotto)
+
+2009-09-24
+----------
+- remove all code for old ivtv driver version 0.10.
+- no longer keep the vbi device open - close it immidiately after a wss command is sent
+- fix permission handling when using "make dist"
+- autodetect the decoder device (in the range /dev/video16 to /dev/video20).
+- remove pvr350.DeviceNumber as it is no longer needed
+- adapt to vdr 1.7.9
+- log a debug note about joint stereo if detected
+- fix gcc 4.4 compiler warnings
+- improve StillPicture
+- allow playing of audio-only streams by sending a black dummy video. Thanks to 
+  Reinhard Nissl for his inspiration and help!
+- introduce svdrpsend commands
+
+2009-10-10
+----------
+- reduce debug messages for log level INFO
+- re-introduce pvr350.DeviceNumber combined with improved autodetection
+
+2009-10-13 (Andreas Schaefers)
+------------------------------
+- coding style fixes
+- implement mp2 recode for joint-stereo and RDS radio
+- fix ac3->mp2 conversion
+
+1.7.0-rc1
+---------
+- various minor changes. Seems to be stable enough to give the baby a real number now :-) 
+
+1.7.0-rc2
+---------
+- if the first packet was detected falsely as audio-only, the decoder was cleared by using Clear().
+  The result was that we often had a visible frame from the last channel. Changed it to stop
+  the decoder with a black frame. 
+- update italian translations (thanks to Diego Pierotto)
+
+1.7.0
+---------
+- implement changes from Andreas Schaefers: improve error handling in ProcessAC3Audio()
+  and ConvertMP2Audio() 
+- don't log "... written=-1 error ..." in case "Resource temporarily unavailable". This happens
+  often (especially in trickmode) and is harmless, because WriteAllOrNothing is designed to handle this.
+- improve error handling for re-opening the decoder device after returning from extern PlayMode
+- add a remark in README.mplayer about different files/path for the script and its config file in Debian.
+- add a remark in README.mplayer about needed root privilege.
+- fix OSD display while using subtitles
+- adapt to vdr 1.7.11
+- improve detection of RDS streams: ignore a single package
+- improve CheckMPEGAudio4JointStereo (thanks to Andreas Schaefers)
+
+1.7.1
+-----
+- Execute CheckMPEGAudio4JointStereo() only once after the stream has changed (e.g. channel switch
+  or start replay). Note: Changing the value of Pvr350Setup.RecodeJointStereo will take effect now
+  after a channels switch or after restarting playback.
+  This makes sure we don't get audio breaks which could happen if CheckMPEGAudio4JointStereo()
+  misdetects a pattern in a single audio package.
+- Skip Pvr350Setup.RecodeRDS and introduce Pvr350Setup.RecodeMP2AudioOnly instead. 
+- add a note about problems with mpg123 version 1.11.0
+- re-initialize twolame library in cMP2toMP2::MP2InitParams()
+
+1.7.2
+-----
+- fix a typo in Set_wss_mode(). Thanks to Lars Hanisch for reporting it.
+
+1.7.3
+-----
+- fix logging of VideoAspect and PixelAspect: must be %f instead of %d
+- adapt cPvr350Osd::CanHandleAreas for vdr-1.7.17
+- remove videodev.h (obsolet in 2.6.38 and never needed)
