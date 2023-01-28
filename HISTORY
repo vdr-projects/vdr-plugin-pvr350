@@ -154,3 +154,15 @@ first release of "new" plugin (see README)
 - fix logging of VideoAspect and PixelAspect: must be %f instead of %d
 - adapt cPvr350Osd::CanHandleAreas for vdr-1.7.17
 - remove videodev.h (obsolet in 2.6.38 and never needed)
+
+1.7.4
+-----
+- default is now to always recode mp2 audio, as there are too many problems with streams like ZDF
+
+1.7.5
+-----
+- remove support for vdr < version 2.0
+- support vdr-2.1.3
+- remove support for ancient ivtv driver versions
+- adapt Makefile to vdr's new Makefile system
+- fix segfaults on exit when framebuffer device is missing

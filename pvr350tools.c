@@ -11,32 +11,10 @@
 #include <time.h>
 #include <stdlib.h>
 #include <sys/ioctl.h>
-#include <linux/videodev2.h>
-#include <linux/version.h>
 
 #include "pvr350tools.h"
 #include "pvr350device.h"
 #include "pvr350setup.h"
-
-struct v4l2_capability vcap;
-
-int GetIvtvVersion(int init, int fd)
-{
-	if (init) {
-	/*only execute if init is not zero, see cPvr350Device::Open()*/
-		memset(&vcap, 0, sizeof(vcap));
-		if (fd <= 0) {
-			log(pvrERROR, "pvr350: GetIvtvVersion: no valid file handle, file is not open");
-			return -1; /*no valid file handle, file is not open*/
-		}
-		if (ioctl(fd, VIDIOC_QUERYCAP, &vcap) != 0) {
-			log(pvrERROR, "pvr350: GetIvtvVersion: query V4L2 capabilities failed.");
-			return -1;
-		} else {
-			log(pvrINFO, "pvr350: IVTV version=0x%06x found", vcap.version);}
-	} //end init  
-	return vcap.version;
-}
 
 void log(int level, const char * fmt, ...)
 {

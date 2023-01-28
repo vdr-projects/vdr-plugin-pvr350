@@ -58,7 +58,6 @@ private:
 	bool		newStream;
         eStreamtype     streamtype;
 
-	uint32_t	KernelVersion;
 	uint8_t		m_PCMBuffer[PCM_BUFFER_SIZE];
 	uint8_t		m_MP2PESBuffer[MP2_PES_BUFFER_SIZE];
 	uint8_t		*m_PESHeader;
@@ -86,7 +85,11 @@ public:
 
 	virtual bool CanReplay(void) const;
 	virtual bool SetPlayMode(ePlayMode PlayMode);
-	virtual void TrickSpeed(int Speed);
+#if APIVERSNUM >= 20103
+	virtual void TrickSpeed(int, bool);
+#else
+	virtual void TrickSpeed(int);
+#endif	
 	virtual void Clear(void);
 	virtual void Play(void);
 	virtual void Freeze(void);
@@ -98,10 +101,8 @@ public:
 	virtual int PlayAudio(const uchar *Data, int Length, uchar Id);
 	virtual void SetVideoFormat(bool VideoFormat16_9);
 	virtual void SetVolumeDevice(int Volume);
-#if APIVERSNUM >= 10708
 	virtual void GetVideoSize(int &Width, int &Height, double &VideoAspect);
 	virtual void GetOsdSize(int &Width, int &Height, double &PixelAspect);
-#endif
 	virtual bool Poll(cPoller &Poller, int TimeoutMs = 0);
 	virtual cSpuDecoder *GetSpuDecoder(void);
 	virtual int64_t GetSTC(void);

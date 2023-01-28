@@ -21,13 +21,8 @@
 #include "pvr350tools.h"
 #include "pvr350device.h"
 
-#if VDRVERSNUM < 10509
-cPvr350Osd::cPvr350Osd(int Left, int Top, int fbfd, unsigned char *osdbuf)
-    :cOsd(Left, Top)
-#else
 cPvr350Osd::cPvr350Osd(int Left, int Top, uint Level, int fbfd, unsigned char *osdbuf)
     :cOsd(Left, Top, Level)
-#endif
 {
     fd = fbfd;
     osd = osdbuf; 
@@ -36,36 +31,15 @@ cPvr350Osd::cPvr350Osd(int Left, int Top, uint Level, int fbfd, unsigned char *o
 
 void cPvr350Osd::Copy_OSD_buffer_to_card(void)
 {
-  if (GetIvtvVersion(0,0) >= KERNEL_VERSION(1, 4, 0)) {
-      lseek (fd, 0, SEEK_SET);
-      if (write (fd, osd, 720 * 576 * 4) < 0) {
-          log(pvrERROR, "pvr350: OSD write failed error=%d:%s", errno, strerror(errno));
-      }
-  } else {
-      struct ivtvfb_dma_frame prep;
-      memset(&prep, 0, sizeof(prep));
-      prep.source = osd;
-      prep.dest_offset = 0;
-      prep.count = 720 * 576 * 4;
-      if (ioctl(fd, IVTVFB_IOC_DMA_FRAME, &prep) < 0) {
-          log(pvrERROR, "pvr350: OSD DMA failed error=%d:%s", errno, strerror(errno));
-      }
+  lseek (fd, 0, SEEK_SET);
+  if (write (fd, osd, 720 * 576 * 4) < 0) {
+      log(pvrERROR, "pvr350: OSD write failed error=%d:%s", errno, strerror(errno));
   }
 }
 
 cPvr350Osd::~cPvr350Osd()
 {
-#if VDRVERSNUM < 10509
-  if (shown) {
-    cBitmap *Bitmap;
-    for ( int i = 0; ( Bitmap = GetBitmap(i)) != NULL; i++ ) {
-        Hide(Bitmap);
-        }
-    Copy_OSD_buffer_to_card();
-    }
-#else
     SetActive(false);
-#endif
 #ifdef SET_VIDEO_WINDOW
     if ( vidWin.bpp != 0 ) {
 	    ResetVideoSize();
@@ -73,7 +47,6 @@ cPvr350Osd::~cPvr350Osd()
 #endif
 }
 
-#if VDRVERSNUM >= 10509
 void cPvr350Osd::SetActive(bool On)
 {
   if (On != Active()) {
@@ -100,7 +73,6 @@ void cPvr350Osd::SetActive(bool On)
       }
   }
 }
-#endif
 
 eOsdError cPvr350Osd::CanHandleAreas(const tArea *Areas, int NumAreas)
 {
@@ -131,10 +103,8 @@ eOsdError cPvr350Osd::SetAreas(const tArea *Areas, int NumAreas)
 
 void cPvr350Osd::Flush(void)
 {
-#if VDRVERSNUM >= 10509
     if (!Active())
      return;
-#endif
     cBitmap *Bitmap;
     for ( int i = 0; ( Bitmap = GetBitmap(i)) != NULL; i++ ) {
         int  x1 = 0, y1 = 0, x2 = 0, y2 = 0;
@@ -185,14 +155,7 @@ cPvr350OsdProvider::cPvr350OsdProvider(int fd, unsigned char *buf)
     osdfd  = fd;
 }
 
-#if VDRVERSNUM < 10509
-cOsd *cPvr350OsdProvider::CreateOsd(int Left, int Top)
-{
-  return new cPvr350Osd(Left, Top, osdfd, osdBuf);
-}
-#else
 cOsd *cPvr350OsdProvider::CreateOsd(int Left, int Top, uint Level)
 {
   return new cPvr350Osd(Left, Top, Level, osdfd, osdBuf);
 }
-#endif

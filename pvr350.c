@@ -10,16 +10,9 @@
 #include "pvr350device.h"
 #include "pvr350menu.h"
 #include "pvr350.h"
-#if VDRVERSNUM < 10507
-#include "po/i18n.h"
-#endif //VDRVERSNUM < 10507
 
-static const char *VERSION        = "1.7.4";
-#if VDRVERSNUM < 10507
-static const char *DESCRIPTION    = "PVR350 as output device";
-#else
+static const char *VERSION        = "1.7.5";
 static const char *DESCRIPTION    = trNOOP("PVR350 as output device");
-#endif
 
 
 cPluginPvr350::cPluginPvr350(void)
@@ -62,9 +55,6 @@ bool cPluginPvr350::ProcessArgs(int argc, char *argv[])
 bool cPluginPvr350::Initialize(void)
 {
   // Initialize any background activities the plugin shall perform.
-#if VDRVERSNUM < 10507
-  RegisterI18n(pvr350_Phrases); 
-#endif //VDRVERSNUM < 10507
   pvr350device = new cPvr350Device();
   return true;
 }

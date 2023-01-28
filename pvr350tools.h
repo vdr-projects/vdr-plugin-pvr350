@@ -14,7 +14,6 @@ enum eLogLevel { pvrUNUSED, pvrERROR, pvrINFO, pvrDEBUG1, pvrDEBUG2 };
 
 extern void    SetVideoSize(int x, int y, int w, int d);
 extern void    ResetVideoSize();
-int GetIvtvVersion(int init, int fd);
 void log(int level, const char * fmt, ...);
 #endif
 

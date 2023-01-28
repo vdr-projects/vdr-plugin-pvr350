@@ -16,16 +16,11 @@ private:
     int  fd;
     unsigned char *osd;
     bool shown;
-#if VDRVERSNUM >= 10509
 protected:
 virtual void SetActive(bool On);
-#endif
+
 public:
-#if VDRVERSNUM < 10509
-    cPvr350Osd(int Left, int Top, int fbfd, unsigned char *osdbuf);
-#else
     cPvr350Osd(int Left, int Top, uint Level, int fbfd, unsigned char *osdbuf);
-#endif
     ~cPvr350Osd();
     eOsdError CanHandleAreas(const tArea *Areas, int NumAreas);
     eOsdError SetAreas(const tArea *Areas, int NumAreas);
@@ -42,11 +37,7 @@ private:
     int            osdfd; 
 public:
     cPvr350OsdProvider(int fd, unsigned char *buf);
-#if VDRVERSNUM < 10509
-    virtual cOsd *CreateOsd(int Left, int Top);
-#else
     virtual cOsd *CreateOsd(int Left, int Top, uint Level);
-#endif
 };
 
 

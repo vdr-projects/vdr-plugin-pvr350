@@ -1,5 +1,5 @@
 /*
- * pvr350device.c: 
+ * pvr350device.c:
  *
  * See the README file for copyright information and how to reach the author.
  *
@@ -26,7 +26,6 @@
 #include <sys/ioctl.h>
 #include <sys/user.h>
 #include <sys/poll.h>
-#include <linux/kernel.h>
 #include <linux/fb.h>
 
 #include "pvr350device.h"
@@ -140,18 +139,6 @@ cPvr350Device::cPvr350Device(void)
 		return;
 		}
 	OpenFramebuffer();
-	// Get kernel version number
-	struct utsname buf;
-	int maj, min, micro, patch;
-	if (uname(&buf) < 0) {
-		log(pvrERROR, "pvr350: Getting kernel version failed !");
-		// Must set KernelVersion for further use
-		KernelVersion = KERNEL_VERSION(2, 6, 0);
-	} else {
-		sscanf(buf.release, "%d.%d.%d.%d", &maj, &min, &micro, &patch);
-		log(pvrDEBUG1, "cPvr350Device::Kernelversion=%d.%d.%d.%d", maj, min, micro, patch);
-		KernelVersion = KERNEL_VERSION(maj, min, micro);
-	}
 
 	m_AC3toMP2Init = false;
 	m_AC3DecodeStatePtr = (AC3DecodeState_t *)&m_AC3DecodeState;
@@ -188,7 +175,7 @@ void cPvr350Device::OpenFramebuffer()
 	}
 	if (fbfd == -1) {
 		log(pvrERROR, "pvr350: Cannot find framebuffer");
-		exit(1);
+		_exit(1);
 	}
 
 	Format16_9 = true;
@@ -215,18 +202,17 @@ void cPvr350Device::OpenFramebuffer()
 	if ((ret = ioctl(fd_out, VIDIOC_S_FBUF, &fbuf)) < 0) {
 		log(pvrERROR, "pvr350: VIDIOC_S_FBUF error=%d:%s", errno, strerror(errno));
 	}
-	
+
 	fmt.fmt.win.global_alpha = 0;
 	if ((ret = ioctl(fd_out, VIDIOC_S_FMT, &fmt)) < 0) {
 		log(pvrERROR, "pvr350: VIDIOC_S_FMT error=%d:%s", errno, strerror(errno));
 	}
- 
+
 	struct fb_fix_screeninfo ivtvfb_fix;
 	memset(&ivtvfb_fix, 0, sizeof(ivtvfb_fix));
 
 	if (ioctl(fbfd, FBIOGET_FSCREENINFO, &ivtvfb_fix) < 0) {
 		log(pvrERROR, "pvr350: FBIOGET_FSCREENINFO error");
-		return;
 	} else {
 		// Take snapshot of current mode
 		ioctl(fbfd, FBIOGET_VSCREENINFO, &ivtvfb_var_old);
@@ -241,7 +227,6 @@ void cPvr350Device::OpenFramebuffer()
 			ivtvfb_var.yres = ivtvfb_var.yres_virtual = 480;
 			if (ioctl(fbfd, FBIOPUT_VSCREENINFO, &ivtvfb_var) < 0) {
 				log(pvrERROR, "pvr350: FBIOPUT_VSCREENINFO error");
-				return;
 			}
 		}
 		osdbufsize = ivtvfb_fix.smem_len;
@@ -252,22 +237,11 @@ void cPvr350Device::OpenFramebuffer()
 	osdbuf_aligned = (unsigned char *)((intptr_t)osdbuffer + (PAGE_SIZE - 1));
 	osdbuf_aligned = (unsigned char *)((intptr_t)osdbuf_aligned & PAGE_MASK);
 	memset(osdbuf_aligned, 0x00, osdbufsize);
-	if (GetIvtvVersion(0,0) >= KERNEL_VERSION(1, 4, 0)) {
-		lseek (fbfd, 0, SEEK_SET);
-		if (write (fbfd, osdbuf_aligned, ivtvfb_var.xres * ivtvfb_var.yres * (ivtvfb_var.bits_per_pixel / 8)) < 0) {
-			log(pvrERROR, "pvr350: OSD write failed error=%d:%s", errno, strerror(errno));
-		}
-	} else {
-		struct ivtvfb_dma_frame prep;
-		memset(&prep, 0, sizeof(prep));
-		prep.source = osdbuf_aligned;
-		prep.dest_offset = 0;
-		prep.count = ivtvfb_var.xres * ivtvfb_var.yres * (ivtvfb_var.bits_per_pixel / 8);
-		memset(osdbuf_aligned, 0x00, osdbufsize);
-		if (ioctl(fbfd, IVTVFB_IOC_DMA_FRAME, &prep) < 0) {
-			log(pvrERROR, "pvr350: IVTVFB_IOC_DMA_FRAME error=%d:%s", errno, strerror(errno));
-		}
+	lseek (fbfd, 0, SEEK_SET);
+	if (write (fbfd, osdbuf_aligned, ivtvfb_var.xres * ivtvfb_var.yres * (ivtvfb_var.bits_per_pixel / 8)) < 0) {
+		log(pvrERROR, "pvr350: OSD write failed error=%d:%s", errno, strerror(errno));
 	}
+
 	spuDecoder = NULL;
 	ResetVideoSize();
 }
@@ -300,13 +274,11 @@ void cPvr350Device::MakePrimaryDevice(bool On)
 {
 	log(pvrINFO, "cPvr350Device::MakePrimaryDevice(%s)", On ? "true" : "false");
 	if (On) {
-	  if (HasDecoder()) {
+	  if (HasDecoder() && fbfd) {
 		  new cPvr350OsdProvider(fbfd, osdbuffer);
 	  }
 	}
-#if VDRVERSNUM >= 10711
 	cDevice::MakePrimaryDevice(On);
-#endif
 }
 
 bool cPvr350Device::HasDecoder(void) const
@@ -381,7 +353,7 @@ bool cPvr350Device::SetPlayMode(ePlayMode PlayMode)
 	speed == -1000: reverse play at normal speed
 	-1000 < speed < -1: slow reverse
 	speed < -1000: fast reverse.
- 	
+
 	other description:
 
 	0 or 1000 specifies normal speed,
@@ -391,7 +363,11 @@ bool cPvr350Device::SetPlayMode(ePlayMode PlayMode)
 	<-1: reverse playback at (-speed/1000) of the normal speed. 
 */
 
+#if APIVERSNUM >= 20103
+void cPvr350Device::TrickSpeed(int Speed, bool forward)
+#else
 void cPvr350Device::TrickSpeed(int Speed)
+#endif
 {
 	log(pvrDEBUG1, "cPvr350Device::TrickSpeed() - Set speed %d", Speed);
 
@@ -433,7 +409,6 @@ void cPvr350Device::SetVideoFormat(bool VideoFormat16_9)
 	Format16_9 = VideoFormat16_9;
 }
 
-#if APIVERSNUM >= 10708
 void cPvr350Device::GetVideoSize(int &Width, int &Height, double &VideoAspect)
 {
 	if (fd_out >= 0) {
@@ -470,7 +445,6 @@ void cPvr350Device::GetOsdSize(int &Width, int &Height, double &PixelAspect)
 	log(pvrDEBUG1, "cPvr350Device::GetOsdSize: Width=%d, Height=%d, PixelAspect=%f",
 		Width, Height, PixelAspect);
 }
-#endif
 
 void cPvr350Device::DecoderStop(int blank)
 {
@@ -483,7 +457,7 @@ void cPvr350Device::DecoderStop(int blank)
 		cmd.flags = VIDEO_CMD_STOP_IMMEDIATELY;
 	}
 	if (IOCTL(fd_out, VIDEO_COMMAND, &cmd) < 0) {
-		log(pvrERROR, "pvr350: VIDEO_CMD_STOP %s error=%d:%s", 
+		log(pvrERROR, "pvr350: VIDEO_CMD_STOP %s error=%d:%s",
 			blank ? "(blank)" : "", errno, strerror(errno));
 	}
 }
@@ -497,7 +471,7 @@ void cPvr350Device::DecoderPlay(int speed)
 		cmd.play.speed = speed;
 	}
 	if (IOCTL(fd_out, VIDEO_COMMAND, &cmd) < 0) {
-		log(pvrERROR, "pvr350: VIDEO_CMD_START (speed=%d) error=%d:%s", 
+		log(pvrERROR, "pvr350: VIDEO_CMD_START (speed=%d) error=%d:%s",
 			speed, errno, strerror(errno));
 	}
 }
@@ -533,18 +507,6 @@ void cPvr350Device::Play(void)
 	log(pvrDEBUG1, "cPvr350Device::(Resume) Playback");
 	DecoderPlay(1000); //normal speed
 	//we cannot use VIDEO_CMD_CONTINUE: Leaving slow speed (trickmode) must reset to normal speed
-
-	if ((KernelVersion <= KERNEL_VERSION(2,6,22)) &&
-	    (GetIvtvVersion(0,0) == KERNEL_VERSION(1, 0, 0))) {
-		/* A bugfix for pause/resume (http://linuxtv.org/hg/v4l-dvb/rev/5541b65b4b19) didn`t make it into 2.6.22
-		   Let`s check if we have a 2.6.22 with original ivtv (1.0.0). If ivtv driver version is higher than 1.0.0, 
-		   we already have an updated driver from v4l-dvb hg. In this case the following workaround is not necessary.
-		   We can not only check the ivtv driver version, because in Kernel 2.6.23 the ivtv driver version 
-		   (although it includes the fix) has also version number 1.0.0
-		*/ 
-		log(pvrDEBUG1, "cPvr350Device::(Continue) Playback");
-		DecoderPaused(0);
-	}
 }
 
 void cPvr350Device::Freeze(void)
@@ -567,7 +529,7 @@ void cPvr350Device::SetAudioChannelDevice(int AudioChannel)
 		AudioChannel == 0?"stereo":
 		AudioChannel == 1?"mono left":"mono right");
 	// 0=stereo, 1=left, 2=right, -1=no information available.
-	
+
 	if (ioctl(fd_out, AUDIO_CHANNEL_SELECT, AudioChannel) < 0) {
 		log(pvrERROR, "pvr350: SetAudioChannelDevice (audio_stereo_mode) error=%d:%s", errno, strerror(errno));
 	}
@@ -600,11 +562,9 @@ int cPvr350Device::PlayAudio(const uchar *Data, int Length, uchar Id)
 	}
 
 #ifdef DEBUG
-	#if VDRVERSNUM > 10700
         if (Pvr350Setup.LogLevel > 2) {
 		PesDump(__FUNCTION__, Data, Length);
 	}
-	#endif
 #endif
 
 	/* look if at the beginning there is the pes packet start indicator */
@@ -728,7 +688,7 @@ int cPvr350Device::PlayAudio(const uchar *Data, int Length, uchar Id)
 			else {
 				log(pvrDEBUG1, "cPvr350Device::PlayAudio(): some streams may play not properly without recoding");
 				DecEncMP2Audio = false;
-			}				
+			}
 		}
 		if (DecEncMP2Audio) {
 			if (!m_MP2RecodeInit) {
@@ -1080,7 +1040,7 @@ int64_t cPvr350Device::GetSTC(void)
 	if (ioctl(fd_out, VIDEO_GET_PTS, &pts) < 0) {
 		log(pvrERROR, "pvr350: GetSTC error=%d:%s", errno, strerror(errno));
 		return -1;
-	}	
+	}
 	log(pvrDEBUG2, "cPvr350Device::GetSTC(): PTS=%lld", pts);
 	return pts;
 }
@@ -1241,7 +1201,7 @@ void cPvr350Device::ProcessAC3Audio(uint8_t *PESPacket, int PayloadOffset, int L
 			log(pvrERROR, "pvr350: ProcessAC3Audio written=%d error=%d:%s",
 				len, errno, strerror(errno));
 		}
-	}	
+	}
 	return;
 }
 
